@@ -42,6 +42,23 @@
   .login-btn:hover{opacity:.85;}
   .login-error{color:#e05260; font-size:.8rem; margin-top:14px; display:none;}
 
+  /* Change Password Modal */
+  .modal-overlay{
+    position:fixed; inset:0; background:rgba(3,7,15,0.72); backdrop-filter:blur(3px);
+    display:none; align-items:center; justify-content:center; z-index:300; padding:20px;
+  }
+  .modal-overlay.show{display:flex;}
+  .modal-box{
+    background:#101d33; border:1px solid #1e3a5f; border-radius:20px; padding:32px;
+    max-width:380px; width:100%; box-shadow:0 30px 70px rgba(0,0,0,0.5); animation:pop .3s ease both;
+  }
+  .modal-box h3{margin-bottom:20px; font-size:1.1rem;}
+  .modal-box .form-field{margin-bottom:14px;}
+  .modal-box .form-field input{width:100%;}
+  .modal-actions{display:flex; gap:10px; margin-top:8px;}
+  .modal-actions .btn{flex:1; justify-content:center; padding:11px;}
+  #pwError.show{display:block;}
+
   /* Dashboard */
   #dashboard{display:none;}
   header{
@@ -144,6 +161,7 @@
     <div class="head-actions">
       <a href="index.html" class="btn">⬅ View Site</a>
       <button class="btn btn-gold" onclick="seedDemoData()">🌱 Seed Last Month Demo Data</button>
+      <button class="btn" onclick="openPwModal()">🔑 Change Password</button>
       <button class="btn btn-danger" onclick="logout()">Logout</button>
     </div>
   </header>
@@ -220,6 +238,20 @@
 
 <div class="toast" id="toast"></div>
 
+<div class="modal-overlay" id="pwModalOverlay">
+  <div class="modal-box">
+    <h3>🔑 Change Admin Password</h3>
+    <div class="form-field"><label>Current Password</label><input type="password" id="pwCurrent" placeholder="Current password"></div>
+    <div class="form-field"><label>New Password</label><input type="password" id="pwNew" placeholder="At least 6 characters"></div>
+    <div class="form-field"><label>Confirm New Password</label><input type="password" id="pwConfirm" placeholder="Re-enter new password"></div>
+    <div class="login-error" id="pwError"></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closePwModal()">Cancel</button>
+      <button class="btn btn-fill" onclick="submitPasswordChange()">Update Password</button>
+    </div>
+  </div>
+</div>
+
 <script>
 // ================= FIREBASE =================
 const firebaseConfig = {
@@ -234,8 +266,10 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 const lyceeRef = db.ref("lyceeBookings");
+const configRef = db.ref("lyceeConfig");
 
-const ADMIN_PASSWORD = "elhorreya2026";
+const DEFAULT_ADMIN_PASSWORD = "elhorreya2026";
+let currentAdminPassword = DEFAULT_ADMIN_PASSWORD;
 const PRICE = 350;
 const today = new Date().toISOString().split("T")[0];
 
@@ -248,10 +282,22 @@ lyceeRef.on("value", snap => {
   if (sessionStorage.getItem("lycee_admin_auth") === "true") refreshAll();
 });
 
+// Keep the admin password in sync with Firebase so it can be changed
+// from any device without redeploying the site. Seeds the default the
+// first time this runs if no password has been set yet.
+configRef.child("adminPassword").on("value", snap => {
+  const val = snap.val();
+  if (val) {
+    currentAdminPassword = val;
+  } else {
+    configRef.child("adminPassword").set(DEFAULT_ADMIN_PASSWORD);
+  }
+});
+
 // ---------------- Auth ----------------
 function tryLogin(){
   const pw = document.getElementById("passwordInput").value;
-  if (pw === ADMIN_PASSWORD){
+  if (pw === currentAdminPassword){
     sessionStorage.setItem("lycee_admin_auth", "true");
     showDashboard();
   } else {
@@ -262,6 +308,37 @@ function tryLogin(){
 function logout(){
   sessionStorage.removeItem("lycee_admin_auth");
   location.reload();
+}
+
+// ---------------- Change Password ----------------
+function openPwModal(){
+  document.getElementById("pwCurrent").value = "";
+  document.getElementById("pwNew").value = "";
+  document.getElementById("pwConfirm").value = "";
+  document.getElementById("pwError").classList.remove("show");
+  document.getElementById("pwModalOverlay").classList.add("show");
+}
+function closePwModal(){
+  document.getElementById("pwModalOverlay").classList.remove("show");
+}
+function submitPasswordChange(){
+  const cur = document.getElementById("pwCurrent").value;
+  const next = document.getElementById("pwNew").value;
+  const confirm = document.getElementById("pwConfirm").value;
+  const errEl = document.getElementById("pwError");
+
+  const fail = (msg) => { errEl.textContent = msg; errEl.classList.add("show"); };
+
+  if (cur !== currentAdminPassword) return fail("Current password is incorrect.");
+  if (!next || next.length < 6) return fail("New password must be at least 6 characters.");
+  if (next !== confirm) return fail("New passwords do not match.");
+
+  configRef.child("adminPassword").set(next)
+    .then(() => {
+      closePwModal();
+      showToast("Password updated successfully", "success");
+    })
+    .catch(err => fail("Error: " + err.message));
 }
 function showDashboard(){
   document.getElementById("loginScreen").classList.add("hidden");
