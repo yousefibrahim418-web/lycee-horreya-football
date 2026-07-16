@@ -7,6 +7,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 <style>
   *{margin:0;padding:0;box-sizing:border-box;}
   body{font-family:'Poppins',sans-serif; background:#070d18; color:#fff; min-height:100vh;}
@@ -156,6 +157,17 @@
     </div>
 
     <div class="panel">
+      <h3>📈 Revenue Over Time <span id="chartTotalLabel" style="margin-left:auto; font-size:.78rem; color:#7c8aad; font-weight:500;"></span></h3>
+      <div style="display:flex; gap:10px; margin-bottom:20px;">
+        <button class="btn btn-fill" id="viewMonthlyBtn" onclick="setChartView('monthly')">Monthly</button>
+        <button class="btn" id="viewWeeklyBtn" onclick="setChartView('weekly')">Weekly</button>
+      </div>
+      <div style="position:relative; height:280px;">
+        <canvas id="revenueChart"></canvas>
+      </div>
+    </div>
+
+    <div class="panel">
       <h3>➕ New Reservation</h3>
       <div class="form-grid">
         <div class="form-field"><label>Date</label><input type="date" id="fDate"></div>
@@ -298,6 +310,113 @@ function clearFilters(){
 function refreshAll(){
   updateStats();
   renderTable();
+  renderRevenueChart();
+}
+
+// ---------------- Revenue Chart ----------------
+let revenueChart = null;
+let chartGranularity = "monthly";
+
+function setChartView(g){
+  chartGranularity = g;
+  document.getElementById("viewMonthlyBtn").classList.toggle("btn-fill", g === "monthly");
+  document.getElementById("viewWeeklyBtn").classList.toggle("btn-fill", g === "weekly");
+  renderRevenueChart();
+}
+
+function getRevenueSeries(granularity){
+  const paid = getBookingsList().filter(b => (b.paymentStatus || "unpaid") === "paid");
+
+  if (granularity === "monthly"){
+    const now = new Date();
+    const months = [];
+    for (let i = 5; i >= 0; i--){
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const key = d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0");
+      months.push({ key, label: d.toLocaleString("en-US", { month: "short", year: "numeric" }) });
+    }
+    const data = months.map(m => paid.filter(b => b.date.slice(0,7) === m.key).reduce((s,b) => s + (b.price || PRICE), 0));
+    return { labels: months.map(m => m.label), data };
+  }
+
+  // weekly: last 8 weeks (Mon–Sun), trailing from current week
+  const now = new Date();
+  const dayOfWeek = (now.getDay() + 6) % 7; // 0 = Monday
+  const thisMonday = new Date(now);
+  thisMonday.setDate(now.getDate() - dayOfWeek);
+  thisMonday.setHours(0,0,0,0);
+
+  const weeks = [];
+  for (let i = 7; i >= 0; i--){
+    const start = new Date(thisMonday);
+    start.setDate(thisMonday.getDate() - 7 * i);
+    const end = new Date(start);
+    end.setDate(start.getDate() + 6);
+    weeks.push({ start, end });
+  }
+  const labels = weeks.map(w =>
+    w.start.toLocaleDateString("en-US", { month: "short", day: "numeric" }) + "–" +
+    w.end.toLocaleDateString("en-US", { month: "short", day: "numeric" })
+  );
+  const data = weeks.map(w => {
+    const startStr = w.start.toISOString().split("T")[0];
+    const endStr = w.end.toISOString().split("T")[0];
+    return paid.filter(b => b.date >= startStr && b.date <= endStr).reduce((s,b) => s + (b.price || PRICE), 0);
+  });
+  return { labels, data };
+}
+
+function renderRevenueChart(){
+  const canvas = document.getElementById("revenueChart");
+  if (!canvas || typeof Chart === "undefined") return;
+  const { labels, data } = getRevenueSeries(chartGranularity);
+  const total = data.reduce((s,v) => s + v, 0);
+  document.getElementById("chartTotalLabel").textContent =
+    "Total shown: " + total.toLocaleString() + " EGP";
+
+  if (revenueChart) revenueChart.destroy();
+  revenueChart = new Chart(canvas.getContext("2d"), {
+    type: "line",
+    data: {
+      labels,
+      datasets: [{
+        label: "Revenue (EGP)",
+        data,
+        borderColor: "#5eca82",
+        backgroundColor: "rgba(94,202,130,0.12)",
+        pointBackgroundColor: "#e0b25e",
+        pointBorderColor: "#e0b25e",
+        pointRadius: 4,
+        pointHoverRadius: 6,
+        borderWidth: 3,
+        tension: 0.35,
+        fill: true
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: "#111d33",
+          borderColor: "#1e3a5f",
+          borderWidth: 1,
+          titleColor: "#fff",
+          bodyColor: "#5eca82",
+          callbacks: { label: ctx => ctx.parsed.y.toLocaleString() + " EGP" }
+        }
+      },
+      scales: {
+        x: { ticks: { color: "#7c8aad", font: { family: "Poppins" } }, grid: { color: "#111d33" } },
+        y: {
+          beginAtZero: true,
+          ticks: { color: "#7c8aad", font: { family: "Poppins" }, callback: v => v.toLocaleString() },
+          grid: { color: "#111d33" }
+        }
+      }
+    }
+  });
 }
 
 function updateStats(){
