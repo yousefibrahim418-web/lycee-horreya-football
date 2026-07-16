@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin Dashboard — El Horreya Court</title>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{font-family:'Poppins',sans-serif; background:#070d18; color:#fff; min-height:100vh;}
+  a{color:inherit;}
+
+  /* Login */
+  .login-screen{
+    position:fixed; inset:0; display:flex; align-items:center; justify-content:center;
+    background:radial-gradient(circle at 30% 20%, rgba(94,202,130,0.08), transparent 60%), #070d18; z-index:200;
+  }
+  .login-screen.hidden{display:none;}
+  .login-box{
+    background:#101d33; border:1px solid #1e3a5f; border-radius:22px; padding:44px 38px;
+    max-width:380px; width:100%; text-align:center; box-shadow:0 30px 70px rgba(0,0,0,0.5);
+    animation:pop .4s ease both;
+  }
+  @keyframes pop{from{opacity:0; transform:scale(.92);} to{opacity:1; transform:scale(1);}}
+  .login-box .lock-icon{font-size:2.6rem; margin-bottom:14px;}
+  .login-box h2{font-size:1.35rem; font-weight:800; margin-bottom:8px;}
+  .login-box p{color:#7c8aad; font-size:.85rem; margin-bottom:24px;}
+  .login-box input{
+    width:100%; padding:13px 16px; border-radius:10px; border:1px solid #1e3a5f;
+    background:#070d18; color:#fff; font-family:inherit; font-size:1rem; text-align:center;
+    letter-spacing:3px; margin-bottom:16px;
+  }
+  .login-box input:focus{outline:none; border-color:#5eca82;}
+  .login-btn{
+    width:100%; padding:14px; border-radius:10px; border:none; cursor:pointer;
+    background:linear-gradient(135deg,#1a472a,#2d8b4e); color:#fff; font-family:inherit;
+    font-size:.95rem; font-weight:700; transition:opacity .2s;
+  }
+  .login-btn:hover{opacity:.85;}
+  .login-error{color:#e05260; font-size:.8rem; margin-top:14px; display:none;}
+
+  /* Dashboard */
+  #dashboard{display:none;}
+  header{
+    background:linear-gradient(135deg,#0e47b1,#0f1a2e); padding:22px 30px; border-bottom:1px solid #1e3a5f;
+    display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:14px;
+  }
+  header h1{font-size:1.3rem; font-weight:800;}
+  header h1 span{color:#5eca82;}
+  .head-actions{display:flex; gap:12px; align-items:center; flex-wrap:wrap;}
+  .btn{
+    display:inline-flex; align-items:center; gap:6px; padding:9px 16px; border-radius:9px;
+    font-family:inherit; font-size:.82rem; font-weight:600; cursor:pointer; border:1px solid #1e3a5f;
+    background:none; color:#cfd9e8; text-decoration:none; transition:all .2s;
+  }
+  .btn:hover{border-color:#5eca82; color:#5eca82;}
+  .btn-danger:hover{border-color:#e05260; color:#e05260;}
+  .btn-fill{background:linear-gradient(135deg,#1a472a,#2d8b4e); border:none; color:#fff;}
+  .btn-fill:hover{opacity:.85; color:#fff;}
+  .btn-gold{background:linear-gradient(135deg,#8a5a1e,#e0b25e); border:none; color:#fff;}
+  .btn-gold:hover{opacity:.85; color:#fff;}
+
+  main{padding:28px 30px 60px; max-width:1300px; margin:0 auto;}
+
+  .stats-row{display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:16px; margin-bottom:30px;}
+  .stat-card{background:#111d33; border:1px solid #1e3a5f; border-radius:16px; padding:22px; transition:transform .2s;}
+  .stat-card:hover{transform:translateY(-4px);}
+  .stat-card .num{font-size:2rem; font-weight:800; color:#5eca82;}
+  .stat-card .lbl{font-size:.74rem; color:#7c8aad; text-transform:uppercase; letter-spacing:.5px; margin-top:4px;}
+  .stat-card.gold .num{color:#e0b25e;}
+  .stat-card.red .num{color:#e05260;}
+
+  .panel{background:#111d33; border:1px solid #1e3a5f; border-radius:18px; padding:26px; margin-bottom:26px;}
+  .panel h3{font-size:1.05rem; margin-bottom:18px; display:flex; align-items:center; gap:8px;}
+
+  .form-grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:14px; align-items:end;}
+  .form-field label{display:block; font-size:.72rem; color:#7c8aad; text-transform:uppercase; letter-spacing:.5px; margin-bottom:6px;}
+  .form-field input, .form-field select{
+    width:100%; padding:11px 13px; border-radius:9px; border:1px solid #1e3a5f; background:#070d18;
+    color:#fff; font-family:inherit; font-size:.86rem;
+  }
+  .form-field input:focus, .form-field select:focus{outline:none; border-color:#5eca82;}
+
+  .filters-bar{display:flex; gap:14px; flex-wrap:wrap; align-items:end; margin-bottom:20px;}
+  .filters-bar .form-field{min-width:150px;}
+
+  .table-wrap{overflow-x:auto;}
+  table{width:100%; border-collapse:collapse; min-width:900px;}
+  thead th{
+    background:#0a1628; padding:13px 14px; text-align:left; font-size:.7rem; color:#7c8aad;
+    text-transform:uppercase; letter-spacing:.5px; border-bottom:2px solid #1e3a5f;
+  }
+  html[dir="rtl"] thead th{text-align:right;}
+  tbody td{padding:13px 14px; border-bottom:1px solid #0d1a2c; font-size:.83rem;}
+  tbody tr:hover{background:rgba(94,202,130,0.03);}
+
+  .badge{display:inline-block; padding:4px 11px; border-radius:20px; font-size:.72rem; font-weight:700; cursor:pointer; user-select:none; transition:opacity .2s;}
+  .badge:hover{opacity:.8;}
+  .badge.paid{background:#0d2818; color:#5eca82;}
+  .badge.unpaid{background:#2a1a0d; color:#e0a050;}
+  .badge.attended{background:#0d2818; color:#5eca82;}
+  .badge.reserved{background:#12203a; color:#7c9be0;}
+  .badge.no-show{background:#2a1216; color:#e05260;}
+
+  .icon-btn{
+    background:none; border:1px solid #3d1a1e; color:#e05260; padding:6px 12px; border-radius:7px;
+    font-family:inherit; font-size:.72rem; cursor:pointer; transition:all .2s;
+  }
+  .icon-btn:hover{background:#1e1215;}
+
+  .empty-state{text-align:center; padding:50px 20px; color:#7c8aad;}
+  .empty-state .icon{font-size:2.6rem; margin-bottom:10px;}
+
+  .toast{
+    position:fixed; bottom:28px; right:28px; background:#111d33; border:1px solid #1e3a5f; padding:14px 22px;
+    border-radius:12px; font-size:.85rem; opacity:0; transform:translateY(20px); transition:all .3s; pointer-events:none;
+  }
+  .toast.show{opacity:1; transform:translateY(0);}
+  .toast.success{border-color:#5eca82; color:#5eca82;}
+  .toast.error{border-color:#e05260; color:#e05260;}
+
+  @media(max-width:700px){ main{padding:20px 16px;} header{padding:18px 20px;} }
+</style>
+</head>
+<body>
+
+<div class="login-screen" id="loginScreen">
+  <div class="login-box">
+    <div class="lock-icon">🔒</div>
+    <h2>Admin Login</h2>
+    <p>Enter the admin password to manage reservations</p>
+    <input type="password" id="passwordInput" placeholder="Password" onkeypress="if(event.key==='Enter') tryLogin();">
+    <button class="login-btn" onclick="tryLogin()">Login</button>
+    <div class="login-error" id="loginError">Incorrect password. Try again.</div>
+  </div>
+</div>
+
+<div id="dashboard">
+  <header>
+    <h1>El Horreya Court · <span>Admin</span></h1>
+    <div class="head-actions">
+      <a href="index.html" class="btn">⬅ View Site</a>
+      <button class="btn btn-gold" onclick="seedDemoData()">🌱 Seed Last Month Demo Data</button>
+      <button class="btn btn-danger" onclick="logout()">Logout</button>
+    </div>
+  </header>
+
+  <main>
+    <div class="stats-row">
+      <div class="stat-card"><div class="num" id="statToday">0</div><div class="lbl">Today's Reservations</div></div>
+      <div class="stat-card"><div class="num" id="statMonth">0</div><div class="lbl">This Month's Reservations</div></div>
+      <div class="stat-card gold"><div class="num" id="statRevenue">0</div><div class="lbl">This Month Revenue (EGP)</div></div>
+      <div class="stat-card red"><div class="num" id="statNoShow">0</div><div class="lbl">No-Shows This Month</div></div>
+    </div>
+
+    <div class="panel">
+      <h3>➕ New Reservation</h3>
+      <div class="form-grid">
+        <div class="form-field"><label>Date</label><input type="date" id="fDate"></div>
+        <div class="form-field"><label>Time Slot</label>
+          <select id="fHour">
+            <option value="18">6:00 PM – 7:00 PM</option>
+            <option value="19">7:00 PM – 8:00 PM</option>
+            <option value="20">8:00 PM – 9:00 PM</option>
+            <option value="21">9:00 PM – 10:00 PM</option>
+            <option value="22">10:00 PM – 11:00 PM</option>
+            <option value="23">11:00 PM – 12:00 AM</option>
+          </select>
+        </div>
+        <div class="form-field"><label>Client Name</label><input type="text" id="fName" placeholder="e.g. Ahmed Hassan"></div>
+        <div class="form-field"><label>Phone</label><input type="text" id="fPhone" placeholder="e.g. 010xxxxxxxx"></div>
+        <div class="form-field"><label>Players</label><input type="number" id="fPlayers" placeholder="10" min="2" max="22"></div>
+        <div class="form-field"><label>Payment</label>
+          <select id="fPayment"><option value="unpaid">Unpaid</option><option value="paid">Paid</option></select>
+        </div>
+        <div class="form-field"><button class="btn btn-fill" style="width:100%; padding:11px;" onclick="createBooking()">Save Reservation</button></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h3>📋 All Reservations</h3>
+      <div class="filters-bar">
+        <div class="form-field"><label>Month</label><input type="month" id="filterMonth"></div>
+        <div class="form-field"><label>Payment</label>
+          <select id="filterPayment"><option value="all">All</option><option value="paid">Paid</option><option value="unpaid">Unpaid</option></select>
+        </div>
+        <div class="form-field"><label>Attendance</label>
+          <select id="filterAttendance"><option value="all">All</option><option value="attended">Attended</option><option value="no-show">No-Show</option><option value="reserved">Reserved</option></select>
+        </div>
+        <div class="form-field"><button class="btn" onclick="clearFilters()">Clear Filters</button></div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>Date</th><th>Time</th><th>Client</th><th>Phone</th><th>Players</th><th>Price</th><th>Payment</th><th>Attendance</th><th>Action</th>
+          </tr></thead>
+          <tbody id="bookingsTable"></tbody>
+        </table>
+        <div class="empty-state" id="emptyState" style="display:none;">
+          <div class="icon">📭</div><p>No reservations found for these filters.</p>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ================= FIREBASE =================
+const firebaseConfig = {
+  apiKey: "AIzaSyDj46yqFggUDVRcel2pdOai8NQuwDqx77A",
+  authDomain: "yousef-personal-life.firebaseapp.com",
+  databaseURL: "https://yousef-personal-life-default-rtdb.firebaseio.com",
+  projectId: "yousef-personal-life",
+  storageBucket: "yousef-personal-life.firebasestorage.app",
+  messagingSenderId: "171068375740",
+  appId: "1:171068375740:web:577268182537dee96b06b9"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+const lyceeRef = db.ref("lyceeBookings");
+
+const ADMIN_PASSWORD = "elhorreya2026";
+const PRICE = 350;
+const today = new Date().toISOString().split("T")[0];
+
+let bookingsCache = {};
+let pageReady = false;
+
+lyceeRef.on("value", snap => {
+  bookingsCache = snap.val() || {};
+  if (!pageReady) return;
+  if (sessionStorage.getItem("lycee_admin_auth") === "true") refreshAll();
+});
+
+// ---------------- Auth ----------------
+function tryLogin(){
+  const pw = document.getElementById("passwordInput").value;
+  if (pw === ADMIN_PASSWORD){
+    sessionStorage.setItem("lycee_admin_auth", "true");
+    showDashboard();
+  } else {
+    document.getElementById("loginError").style.display = "block";
+    document.getElementById("passwordInput").value = "";
+  }
+}
+function logout(){
+  sessionStorage.removeItem("lycee_admin_auth");
+  location.reload();
+}
+function showDashboard(){
+  document.getElementById("loginScreen").classList.add("hidden");
+  document.getElementById("dashboard").style.display = "block";
+  refreshAll();
+}
+
+// ---------------- Helpers ----------------
+function formatHour(h){
+  const suffix = h >= 12 ? "PM" : "AM";
+  const d = h > 12 ? h - 12 : (h === 0 ? 12 : h);
+  const endH = (h + 1) % 24;
+  const endSuffix = endH >= 12 ? "PM" : "AM";
+  const endD = endH > 12 ? endH - 12 : (endH === 0 ? 12 : endH);
+  return d + ":00 " + suffix + " – " + endD + ":00 " + endSuffix;
+}
+function getBookingsList(){
+  const list = [];
+  Object.keys(bookingsCache).forEach(date => {
+    Object.keys(bookingsCache[date]).forEach(hour => {
+      list.push({ ...bookingsCache[date][hour], date, hour: parseInt(hour,10) });
+    });
+  });
+  list.sort((a,b) => {
+    if (a.date !== b.date) return b.date.localeCompare(a.date);
+    return a.hour - b.hour;
+  });
+  return list;
+}
+
+const fDateInput = document.getElementById("fDate");
+fDateInput.value = today;
+const filterMonth = document.getElementById("filterMonth");
+filterMonth.value = today.slice(0,7);
+document.getElementById("filterPayment").addEventListener("change", renderTable);
+document.getElementById("filterAttendance").addEventListener("change", renderTable);
+filterMonth.addEventListener("change", renderTable);
+
+function clearFilters(){
+  filterMonth.value = "";
+  document.getElementById("filterPayment").value = "all";
+  document.getElementById("filterAttendance").value = "all";
+  renderTable();
+}
+
+function refreshAll(){
+  updateStats();
+  renderTable();
+}
+
+function updateStats(){
+  const list = getBookingsList();
+  const todayList = list.filter(b => b.date === today);
+  document.getElementById("statToday").textContent = todayList.length;
+
+  const curMonth = today.slice(0,7);
+  const monthList = list.filter(b => b.date.slice(0,7) === curMonth);
+  document.getElementById("statMonth").textContent = monthList.length;
+
+  const revenue = monthList.filter(b => b.paymentStatus === "paid").reduce((s,b) => s + (b.price || PRICE), 0);
+  document.getElementById("statRevenue").textContent = revenue.toLocaleString();
+
+  const noShows = monthList.filter(b => b.attendance === "no-show").length;
+  document.getElementById("statNoShow").textContent = noShows;
+}
+
+function renderTable(){
+  const tbody = document.getElementById("bookingsTable");
+  let list = getBookingsList();
+
+  const monthVal = filterMonth.value;
+  const payVal = document.getElementById("filterPayment").value;
+  const attVal = document.getElementById("filterAttendance").value;
+
+  if (monthVal) list = list.filter(b => b.date.slice(0,7) === monthVal);
+  if (payVal !== "all") list = list.filter(b => (b.paymentStatus || "unpaid") === payVal);
+  if (attVal !== "all") list = list.filter(b => (b.attendance || "reserved") === attVal);
+
+  tbody.innerHTML = "";
+  document.getElementById("emptyState").style.display = list.length === 0 ? "block" : "none";
+
+  list.forEach(b => {
+    const payment = b.paymentStatus || "unpaid";
+    const attendance = b.attendance || "reserved";
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${b.date}</td>
+      <td>${formatHour(b.hour)}</td>
+      <td><strong>${b.name || "-"}</strong></td>
+      <td>${b.phone || "-"}</td>
+      <td>${b.players || "-"}</td>
+      <td>${b.price || PRICE} EGP</td>
+      <td><span class="badge ${payment}" onclick="togglePayment('${b.date}',${b.hour})">${payment}</span></td>
+      <td><span class="badge ${attendance}" onclick="cycleAttendance('${b.date}',${b.hour})">${attendance}</span></td>
+      <td><button class="icon-btn" onclick="deleteBooking('${b.date}',${b.hour},'${(b.name||"").replace(/'/g,"")}')">Delete</button></td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+// ---------------- CRUD ----------------
+function createBooking(){
+  const date = fDateInput.value;
+  const hour = document.getElementById("fHour").value;
+  const name = document.getElementById("fName").value.trim();
+  const phone = document.getElementById("fPhone").value.trim();
+  const players = parseInt(document.getElementById("fPlayers").value, 10) || null;
+  const paymentStatus = document.getElementById("fPayment").value;
+
+  if (!date || !name){
+    showToast("Please enter at least a date and client name", "error");
+    return;
+  }
+  if (bookingsCache[date] && bookingsCache[date][hour]){
+    showToast("That slot is already reserved. Choose another.", "error");
+    return;
+  }
+
+  lyceeRef.child(date).child(hour).set({
+    name, phone, players, price: PRICE, paymentStatus,
+    attendance: "reserved", bookedAt: new Date().toISOString(), bookedBy: "admin"
+  }).then(() => {
+    showToast("Reservation saved for " + name, "success");
+    document.getElementById("fName").value = "";
+    document.getElementById("fPhone").value = "";
+    document.getElementById("fPlayers").value = "";
+  }).catch(err => showToast("Error: " + err.message, "error"));
+}
+
+function togglePayment(date, hour){
+  const b = bookingsCache[date] && bookingsCache[date][hour];
+  if (!b) return;
+  const next = b.paymentStatus === "paid" ? "unpaid" : "paid";
+  lyceeRef.child(date).child(hour).child("paymentStatus").set(next);
+}
+
+function cycleAttendance(date, hour){
+  const b = bookingsCache[date] && bookingsCache[date][hour];
+  if (!b) return;
+  const order = ["reserved","attended","no-show"];
+  const cur = b.attendance || "reserved";
+  const next = order[(order.indexOf(cur) + 1) % order.length];
+  lyceeRef.child(date).child(hour).child("attendance").set(next);
+}
+
+function deleteBooking(date, hour, name){
+  if (!confirm("Delete reservation for " + name + " on " + date + "?")) return;
+  lyceeRef.child(date).child(hour).remove()
+    .then(() => showToast("Reservation deleted", "success"))
+    .catch(err => showToast("Error: " + err.message, "error"));
+}
+
+function showToast(msg, type){
+  const t = document.getElementById("toast");
+  t.textContent = msg;
+  t.className = "toast " + (type || "success") + " show";
+  setTimeout(() => t.classList.remove("show"), 3200);
+}
+
+// ---------------- Demo Data Seeding ----------------
+const DEMO_NAMES = [
+  "Ahmed Hassan","Mohamed Ali","Omar Khaled","Youssef Tarek","Karim Mostafa",
+  "Amr Saeed","Mahmoud Adel","Hassan Fathy","Sherif Nabil","Tamer Ashraf",
+  "Ziad Ramy","Kareem El Sayed","Islam Gaber","Bassel Hany","Mostafa Younes",
+  "Adham Wael","Fady Maged","Hazem Osman","Marwan Sabry","Seif Eldin",
+  "Khaled Ezzat","Ahmed Nasser","Tarek Salah","Omar Fawzy","Yehia Ragab"
+];
+
+function seedDemoData(){
+  const now = new Date();
+  const lastMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const year = lastMonthDate.getFullYear();
+  const month = lastMonthDate.getMonth();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const hours = [18,19,20,21,22,23];
+
+  const usedSlots = new Set();
+  const writes = [];
+  const count = 24;
+
+  for (let i = 0; i < count; i++){
+    let day, hour, key;
+    let attempts = 0;
+    do {
+      day = 1 + Math.floor(Math.random() * daysInMonth);
+      hour = hours[Math.floor(Math.random() * hours.length)];
+      key = day + "_" + hour;
+      attempts++;
+    } while (usedSlots.has(key) && attempts < 30);
+    usedSlots.add(key);
+
+    const dateStr = year + "-" + String(month + 1).padStart(2,"0") + "-" + String(day).padStart(2,"0");
+    const name = DEMO_NAMES[Math.floor(Math.random() * DEMO_NAMES.length)];
+    const players = 8 + Math.floor(Math.random() * 8);
+    const paymentRoll = Math.random();
+    const paymentStatus = paymentRoll < 0.75 ? "paid" : "unpaid";
+    const attRoll = Math.random();
+    const attendance = attRoll < 0.8 ? "attended" : (attRoll < 0.92 ? "no-show" : "reserved");
+    const phone = "010" + Math.floor(10000000 + Math.random() * 89999999);
+
+    writes.push(
+      lyceeRef.child(dateStr).child(hour).set({
+        name, phone, players, price: PRICE, paymentStatus, attendance,
+        bookedAt: new Date(year, month, day, 10, 0).toISOString(), bookedBy: "admin"
+      })
+    );
+  }
+
+  Promise.all(writes)
+    .then(() => showToast("Seeded " + count + " demo reservations for last month", "success"))
+    .catch(err => showToast("Error seeding data: " + err.message, "error"));
+}
+
+// Auto-refresh on tab focus
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden && sessionStorage.getItem("lycee_admin_auth") === "true") refreshAll();
+});
+
+pageReady = true;
+if (sessionStorage.getItem("lycee_admin_auth") === "true") showDashboard();
+</script>
+</body>
+</html>
